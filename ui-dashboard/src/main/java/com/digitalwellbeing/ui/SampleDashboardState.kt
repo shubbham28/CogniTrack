@@ -26,6 +26,7 @@ fun sampleDashboardState(): DashboardState = DashboardState(
             repeat(24) { hour ->
                 add(
                     HeatmapCell(
+                        date = date,
                         dayLabel = label,
                         dateLabel = date.toString(),
                         hour = hour,

@@ -48,7 +48,8 @@ object AppModule {
             sessionStitcher = SessionStitcher(),
             pickupCounter = PickupCounter(),
             summaryCalculator = DailySummaryCalculator(ZoneId.systemDefault()),
-            translator = DigitalFitnessTranslator()
+            translator = DigitalFitnessTranslator(),
+            usageInsightBuilder = UsageInsightBuilder(ZoneId.systemDefault())
         )
     }
 }

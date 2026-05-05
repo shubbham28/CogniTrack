@@ -3,6 +3,13 @@ package com.digitalwellbeing.ui
 import com.digitalwellbeing.capture.AppFlowStep
 import java.time.LocalDate
 
+data class MinuteTrendPoint(
+    val minuteIndex: Int,
+    val activeFraction: Float,
+    val colorHex: Long,
+    val label: String
+)
+
 data class TrendPoint(
     val hour: Int,
     val label: String,
@@ -36,6 +43,15 @@ data class DashboardState(
     val flow: List<AppFlowStep>
 )
 
+data class HourInsight(
+    val title: String,
+    val subtitle: String,
+    val totalVisibleMinutes: Int,
+    val idleMinutes: Int,
+    val minuteTrend: List<MinuteTrendPoint>,
+    val pieBreakdown: List<AppUsageBreakdown>
+)
+
 data class TimelineSlice(
     val label: String,
     val minutes: Int,
@@ -43,6 +59,7 @@ data class TimelineSlice(
 )
 
 data class HeatmapCell(
+    val date: LocalDate,
     val dayLabel: String,
     val dateLabel: String,
     val hour: Int,

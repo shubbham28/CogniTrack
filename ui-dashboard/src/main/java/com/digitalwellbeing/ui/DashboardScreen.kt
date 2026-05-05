@@ -72,8 +72,12 @@ private data class MetricInsight(
 @Composable
 fun DashboardScreen(
     state: DashboardState,
+    selectedHeatmapCell: HeatmapCell? = null,
+    hourInsight: HourInsight,
     statusLine: String? = null,
     onRefresh: (() -> Unit)? = null,
+    onSelectHeatmapCell: ((HeatmapCell) -> Unit)? = null,
+    onShowCurrentHourInsight: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -117,7 +121,13 @@ fun DashboardScreen(
             ) { tab ->
                 when (tab) {
                     DashboardTab.HOME -> HomeTab(state, statusLine, onRefresh) { selectedInsight = it }
-                    DashboardTab.INSIGHTS -> InsightsTab(state)
+                    DashboardTab.INSIGHTS -> InsightsTab(
+                        state = state,
+                        selectedCell = selectedHeatmapCell,
+                        hourInsight = hourInsight,
+                        onSelectCell = onSelectHeatmapCell,
+                        onShowCurrentHourInsight = onShowCurrentHourInsight
+                    )
                     DashboardTab.BEHAVIOR -> BehaviorTab(state) { selectedInsight = it }
                     DashboardTab.TRUST -> TrustTab()
                 }
@@ -199,11 +209,13 @@ private fun HomeTab(
 }
 
 @Composable
-private fun InsightsTab(state: DashboardState) {
-    var selectedCell by remember(state.heatmap) {
-        mutableStateOf(state.heatmap.firstOrNull { it.minutes > 0 } ?: state.heatmap.firstOrNull())
-    }
-
+private fun InsightsTab(
+    state: DashboardState,
+    selectedCell: HeatmapCell?,
+    hourInsight: HourInsight,
+    onSelectCell: ((HeatmapCell) -> Unit)?,
+    onShowCurrentHourInsight: (() -> Unit)?
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -212,22 +224,27 @@ private fun InsightsTab(state: DashboardState) {
         item {
             Text("Weekly heatmap", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Tap any hour block to inspect usage and top apps.",
+                "Tap any hour block for its 60-minute breakdown, or jump back to the latest 60 minutes.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         item {
+            if (onShowCurrentHourInsight != null) {
+                FilledTonalButton(onClick = onShowCurrentHourInsight) {
+                    Text("Current 60 min")
+                }
+            }
+        }
+        item {
             WeeklyHeatmap(
                 cells = state.heatmap,
                 selectedCell = selectedCell,
-                onSelectCell = { selectedCell = it }
+                onSelectCell = { cell -> onSelectCell?.invoke(cell) }
             )
         }
-        item {
-            selectedCell?.let { HeatmapDetailCard(it) }
-        }
-        item { HourlyTrendCard(state.trends) }
+        item { HeatmapDetailCard(selectedCell, hourInsight) }
+        item { SixtyMinuteInsightCard(hourInsight) }
     }
 }
 
@@ -518,16 +535,28 @@ fun WeeklyHeatmap(
 }
 
 @Composable
-private fun HeatmapDetailCard(cell: HeatmapCell) {
+private fun HeatmapDetailCard(
+    cell: HeatmapCell?,
+    hourInsight: HourInsight
+) {
     GlassCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("${cell.dayLabel} ${cell.dateLabel} · ${cell.hour.toString().padStart(2, '0')}:00", style = MaterialTheme.typography.titleLarge)
+            Text(hourInsight.title, style = MaterialTheme.typography.titleLarge)
             Text(
-                if (cell.minutes > 0) "${formatMinutesLong(cell.minutes)} used in this hour" else "No visible app usage in this hour",
+                hourInsight.subtitle,
                 style = MaterialTheme.typography.bodyLarge
             )
-            if (cell.apps.isNotEmpty()) {
-                cell.apps.forEach { app ->
+            Text(
+                if (cell != null) {
+                    if (cell.minutes > 0) "${formatMinutesLong(cell.minutes)} visible in selected hour." else "No visible app usage in this hour."
+                } else {
+                    "Showing the latest rolling 60-minute window."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (hourInsight.pieBreakdown.isNotEmpty()) {
+                hourInsight.pieBreakdown.forEach { app ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -546,6 +575,122 @@ private fun HeatmapDetailCard(cell: HeatmapCell) {
                         }
                         Text(formatMinutesLong(app.minutes), style = MaterialTheme.typography.bodyMedium)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SixtyMinuteInsightCard(hourInsight: HourInsight) {
+    GlassCard {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("60-minute trend", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Minute-by-minute foreground activity for the selected hour, with a breakdown of app time versus idle time.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            MinuteTrendStrip(hourInsight)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Visible ${formatMinutesLong(hourInsight.totalVisibleMinutes)}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "Idle ${formatMinutesLong(hourInsight.idleMinutes)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            HourPieChart(hourInsight.pieBreakdown)
+        }
+    }
+}
+
+@Composable
+private fun MinuteTrendStrip(hourInsight: HourInsight) {
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    Canvas(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+        repeat(4) { index ->
+            val y = size.height * (index / 3f)
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 2f
+            )
+        }
+
+        val stepX = size.width / hourInsight.minuteTrend.size.coerceAtLeast(1)
+        hourInsight.minuteTrend.forEachIndexed { index, point ->
+            val barHeight = size.height * point.activeFraction.coerceIn(0.04f, 1f)
+            drawRoundRect(
+                color = Color(point.colorHex),
+                topLeft = Offset(index * stepX + 1f, size.height - barHeight),
+                size = Size((stepX - 2f).coerceAtLeast(2f), barHeight),
+                cornerRadius = CornerRadius(5f, 5f)
+            )
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        listOf("00", "15", "30", "45", "59").forEach { label ->
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun HourPieChart(pieBreakdown: List<AppUsageBreakdown>) {
+    val totalMinutes = pieBreakdown.sumOf { it.minutes }.coerceAtLeast(1)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Canvas(modifier = Modifier.size(148.dp)) {
+            var startAngle = -90f
+            pieBreakdown.forEach { slice ->
+                val sweep = 360f * (slice.minutes / totalMinutes.toFloat())
+                drawArc(
+                    color = Color(slice.colorHex),
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    style = Stroke(width = 42f, cap = StrokeCap.Butt)
+                )
+                startAngle += sweep
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            pieBreakdown.forEach { slice ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(Color(slice.colorHex), RoundedCornerShape(99.dp))
+                        )
+                        Text(slice.label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(formatMinutesLong(slice.minutes), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }

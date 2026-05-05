@@ -50,8 +50,12 @@ class MainActivity : ComponentActivity() {
                         )
                         is DashboardUiState.Ready -> DashboardScreen(
                             state = state.state,
+                            selectedHeatmapCell = state.selectedCell,
+                            hourInsight = state.hourInsight,
                             statusLine = state.status,
-                            onRefresh = dashboardViewModel::refresh
+                            onRefresh = dashboardViewModel::refresh,
+                            onSelectHeatmapCell = dashboardViewModel::selectHeatmapCell,
+                            onShowCurrentHourInsight = dashboardViewModel::showCurrentHourInsight
                         )
                         is DashboardUiState.Error -> ErrorScreen(
                             message = state.message,
