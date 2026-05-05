@@ -2,8 +2,10 @@ package com.digitalwellbeing.app
 
 import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.provider.Settings
 import androidx.room.Room
 import com.digitalwellbeing.analytics.DailySummaryCalculator
 import com.digitalwellbeing.analytics.DigitalFitnessTranslator
@@ -62,13 +64,20 @@ class PermissionGateway(
             android.os.Process.myUid(),
             context.packageName
         )
+        val listenerComponent = ComponentName(context, CogniNotificationListenerService::class.java)
+        val enabledListeners = Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners"
+        ).orEmpty()
         return PermissionSnapshot(
             hasUsageAccess = mode == AppOpsManager.MODE_ALLOWED,
-            hasNotificationAccess = false,
+            hasNotificationAccess = enabledListeners.contains(listenerComponent.flattenToString()),
             hasAccessibilityAccess = false,
             advancedModeEnabled = advancedModeEnabled
         )
     }
 
     fun hasUsageAccess(): Boolean = evaluator.evaluate(snapshot()) != com.digitalwellbeing.capture.PermissionState.NEEDS_USAGE_ACCESS
+
+    fun hasNotificationAccess(): Boolean = snapshot().hasNotificationAccess
 }

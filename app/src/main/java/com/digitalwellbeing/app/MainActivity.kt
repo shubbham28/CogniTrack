@@ -43,6 +43,9 @@ class MainActivity : ComponentActivity() {
                         DashboardUiState.MissingPermission -> PermissionScreen(
                             onOpenUsageAccess = {
                                 startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                            },
+                            onOpenNotificationAccess = {
+                                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                             }
                         )
                         is DashboardUiState.Ready -> DashboardScreen(
@@ -92,7 +95,8 @@ private fun LoadingScreen() {
 
 @androidx.compose.runtime.Composable
 private fun PermissionScreen(
-    onOpenUsageAccess: () -> Unit
+    onOpenUsageAccess: () -> Unit,
+    onOpenNotificationAccess: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -109,6 +113,14 @@ private fun PermissionScreen(
         )
         Button(onClick = onOpenUsageAccess, modifier = Modifier.fillMaxWidth()) {
             Text("Open Usage Access")
+        }
+        Button(
+            onClick = onOpenNotificationAccess,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+        ) {
+            Text("Open Notification Access")
         }
     }
 }

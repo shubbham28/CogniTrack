@@ -28,7 +28,7 @@ class DashboardViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = try {
                 val dashboard = repository.loadDashboardState()
-                DashboardUiState.Ready(dashboard, "Imported live UsageStats from this device")
+                DashboardUiState.Ready(dashboard, repository.statusLine())
             } catch (missing: MissingUsageAccessException) {
                 DashboardUiState.MissingPermission
             } catch (t: Throwable) {

@@ -35,6 +35,14 @@ class DashboardRepository(
     private val translator: DigitalFitnessTranslator,
     private val zoneId: ZoneId = ZoneId.systemDefault()
 ) {
+    fun statusLine(): String {
+        return if (permissionGateway.hasNotificationAccess()) {
+            "Imported live UsageStats, screen events, and notification load"
+        } else {
+            "Imported live UsageStats and screen events. Enable notification access for real cognitive load."
+        }
+    }
+
     suspend fun loadDashboardState(now: Instant = Instant.now()): DashboardState {
         val usageAccess = permissionGateway.hasUsageAccess()
         if (!usageAccess) {

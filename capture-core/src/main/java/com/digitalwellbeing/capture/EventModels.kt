@@ -16,6 +16,7 @@ enum class EventType {
 enum class EventSource {
     USAGE_STATS,
     SCREEN_EVENTS,
+    NOTIFICATION_LISTENER,
     ACCESSIBILITY,
     SYNTHETIC
 }
