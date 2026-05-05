@@ -11,6 +11,7 @@ CogniTrack turns digital behavior into fitness-style analytics:
 Current app behavior:
 
 - Imports real on-device `UsageStats` after you grant Usage Access
+- Starts a foreground tracker service that records `SCREEN_ON`, `SCREEN_OFF`, and `USER_PRESENT` events
 - Builds the dashboard from actual app sessions, pickups, app switches, and app-flow sequences
 - Uses 7 days of detailed event import for timeline and heatmap
 - Uses 7/30/90 day aggregate usage totals for trend cards
@@ -62,7 +63,15 @@ adb shell am start -n com.digitalwellbeing.app/.MainActivity
 ```
 
 6. In the app, tap `Open Usage Access`, enable CogniTrack, then return to the app.
-7. The app will refresh on resume and import real device activity.
+7. The app will refresh on resume, import real device activity, and start a foreground tracking notification.
+
+If `adb devices -l` shows no devices:
+
+- unlock the phone
+- confirm the USB mode is not charge-only
+- replug the cable
+- accept the RSA debugging prompt on the phone
+- run `adb kill-server && adb start-server && adb devices -l`
 
 APK output:
 

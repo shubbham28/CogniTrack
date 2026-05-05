@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,6 +62,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (PermissionGateway(this).hasUsageAccess()) {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, ScreenEventTrackerService::class.java)
+            )
+        }
         dashboardViewModel.refresh()
     }
 }

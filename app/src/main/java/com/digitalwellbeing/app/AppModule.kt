@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import androidx.room.Room
 import com.digitalwellbeing.analytics.DailySummaryCalculator
 import com.digitalwellbeing.analytics.DigitalFitnessTranslator
+import com.digitalwellbeing.analytics.PickupCounter
 import com.digitalwellbeing.analytics.SessionStitcher
 import com.digitalwellbeing.capture.PermissionSnapshot
 import com.digitalwellbeing.capture.PermissionStateEvaluator
@@ -14,15 +15,26 @@ import com.digitalwellbeing.storage.DigitalWellbeingDatabase
 import java.time.ZoneId
 
 object AppModule {
+    @Volatile
+    private var database: DigitalWellbeingDatabase? = null
+
+    fun provideDatabase(context: Context): DigitalWellbeingDatabase {
+        return database ?: synchronized(this) {
+            database ?: Room.databaseBuilder(
+                context.applicationContext,
+                DigitalWellbeingDatabase::class.java,
+                "cognitrack.db"
+            ).build().also { database = it }
+        }
+    }
+
+    fun provideDao(context: Context) = provideDatabase(context).wellbeingDao()
+
     fun provideRepository(context: Context): DashboardRepository {
         val appContext = context.applicationContext
         val usageStatsManager = appContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val packageManager = appContext.packageManager
-        val database = Room.databaseBuilder(
-            appContext,
-            DigitalWellbeingDatabase::class.java,
-            "cognitrack.db"
-        ).build()
+        val database = provideDatabase(appContext)
 
         return DashboardRepository(
             usageStatsCollector = UsageStatsCollector(usageStatsManager),
@@ -31,6 +43,7 @@ object AppModule {
             dao = database.wellbeingDao(),
             packageManager = packageManager,
             sessionStitcher = SessionStitcher(),
+            pickupCounter = PickupCounter(),
             summaryCalculator = DailySummaryCalculator(ZoneId.systemDefault()),
             translator = DigitalFitnessTranslator()
         )

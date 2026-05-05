@@ -4,11 +4,14 @@ import android.os.Build
 import android.content.pm.PackageManager
 import com.digitalwellbeing.analytics.DailySummaryCalculator
 import com.digitalwellbeing.analytics.DigitalFitnessTranslator
+import com.digitalwellbeing.analytics.PickupCounter
 import com.digitalwellbeing.analytics.SessionStitcher
 import com.digitalwellbeing.capture.AppSession
+import com.digitalwellbeing.capture.EventSource
 import com.digitalwellbeing.capture.EventType
 import com.digitalwellbeing.capture.RawEvent
 import com.digitalwellbeing.storage.DigitalWellbeingDao
+import com.digitalwellbeing.storage.toDomain
 import com.digitalwellbeing.storage.toEntity
 import com.digitalwellbeing.ui.DashboardState
 import com.digitalwellbeing.ui.HeatmapCell
@@ -27,6 +30,7 @@ class DashboardRepository(
     private val dao: DigitalWellbeingDao,
     private val packageManager: PackageManager,
     private val sessionStitcher: SessionStitcher,
+    private val pickupCounter: PickupCounter,
     private val summaryCalculator: DailySummaryCalculator,
     private val translator: DigitalFitnessTranslator,
     private val zoneId: ZoneId = ZoneId.systemDefault()
@@ -38,14 +42,19 @@ class DashboardRepository(
         }
 
         val sevenDaysAgo = now.minus(7, ChronoUnit.DAYS)
-        val rawEvents = usageStatsCollector.collect(sevenDaysAgo, now).sortedBy { it.timestamp }
+        val importedUsageEvents = usageStatsCollector.collect(sevenDaysAgo, now).sortedBy { it.timestamp }
+        persistImportWindow(importedUsageEvents, sevenDaysAgo, now)
+        val rawEvents = dao.rawEventsBetween(
+            sevenDaysAgo.toEpochMilli(),
+            now.toEpochMilli()
+        ).map { it.toDomain() }
         val sessions = sessionStitcher.stitch(rawEvents)
-        persistImportWindow(rawEvents, sessions, sevenDaysAgo, now)
+        persistSessions(sessions, sevenDaysAgo, now)
 
         val today = now.atZone(zoneId).toLocalDate()
         val todaySessions = sessions.filter { it.startTs.atZone(zoneId).toLocalDate() == today }
         val todayEvents = rawEvents.filter { it.timestamp.atZone(zoneId).toLocalDate() == today }
-        val pickups = todayEvents.count { it.eventType == EventType.UNLOCK }
+        val pickups = pickupCounter.count(todayEvents)
         val notifications = todayEvents.count { it.eventType == EventType.NOTIFICATION_POSTED }
         val multitaskingMoments = estimateMultitasking(todaySessions)
         val summary = summaryCalculator.calculate(
@@ -80,13 +89,19 @@ class DashboardRepository(
 
     private suspend fun persistImportWindow(
         rawEvents: List<RawEvent>,
+        start: Instant,
+        end: Instant
+    ) {
+        dao.deleteRawEventsBetweenForSource(start.toEpochMilli(), end.toEpochMilli(), EventSource.USAGE_STATS.name)
+        dao.insertRawEvents(rawEvents.map { it.toEntity() })
+    }
+
+    private suspend fun persistSessions(
         sessions: List<AppSession>,
         start: Instant,
         end: Instant
     ) {
-        dao.deleteRawEventsBetween(start.toEpochMilli(), end.toEpochMilli())
         dao.deleteSessionsBetween(start.toEpochMilli(), end.toEpochMilli())
-        dao.insertRawEvents(rawEvents.map { it.toEntity() })
         dao.insertSessions(sessions.map { it.toEntity() })
     }
 
