@@ -10,7 +10,8 @@ class DashboardStateTest {
 
         assertThat(state.timeline).isNotEmpty()
         assertThat(state.heatmap).isNotEmpty()
-        assertThat(state.trends).hasSize(3)
+        assertThat(state.trends.total.points).hasSize(24)
+        assertThat(state.trends.apps).isNotEmpty()
         assertThat(state.flow).isNotEmpty()
     }
 }

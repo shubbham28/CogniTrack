@@ -13,46 +13,52 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-private val Ink = Color(0xFF121212)
-private val Bone = Color(0xFFF6F0E8)
-private val Vermilion = Color(0xFFD64C2F)
-private val Lime = Color(0xFF9BC53D)
-private val Slate = Color(0xFF2A3441)
-private val Smoke = Color(0xFFEEE6DC)
+private val Midnight = Color(0xFF09111F)
+private val Mist = Color(0xFFF5F7FB)
+private val Ember = Color(0xFFFF7A59)
+private val Volt = Color(0xFFB6F36A)
+private val Ice = Color(0xFF8EC5FF)
+private val Fog = Color(0xFF9FAFD1)
+private val Glass = Color(0x26FFFFFF)
+private val GlassDark = Color(0x1F0F1B2E)
 
 private val LightColors: ColorScheme = lightColorScheme(
-    primary = Vermilion,
-    onPrimary = Bone,
-    secondary = Lime,
-    background = Bone,
-    onBackground = Ink,
-    surface = Smoke,
-    onSurface = Ink,
-    tertiary = Slate
+    primary = Ember,
+    onPrimary = Mist,
+    secondary = Volt,
+    tertiary = Ice,
+    background = Color(0xFFEAF0F8),
+    onBackground = Midnight,
+    surface = Glass,
+    onSurface = Midnight,
+    surfaceVariant = Color(0x66FFFFFF),
+    onSurfaceVariant = Midnight
 )
 
 private val DarkColors: ColorScheme = darkColorScheme(
-    primary = Vermilion,
-    onPrimary = Bone,
-    secondary = Lime,
-    background = Ink,
-    onBackground = Bone,
-    surface = Slate,
-    onSurface = Bone,
-    tertiary = Smoke
+    primary = Ember,
+    onPrimary = Mist,
+    secondary = Volt,
+    tertiary = Ice,
+    background = Midnight,
+    onBackground = Mist,
+    surface = GlassDark,
+    onSurface = Mist,
+    surfaceVariant = Color(0x331A2940),
+    onSurfaceVariant = Color(0xFFDDE7FF)
 )
 
 private val CogniTypography = Typography(
     headlineLarge = TextStyle(
         fontFamily = FontFamily.Serif,
         fontWeight = FontWeight.Black,
-        fontSize = 38.sp,
-        lineHeight = 42.sp
+        fontSize = 40.sp,
+        lineHeight = 44.sp
     ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Serif,
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp
+        fontSize = 30.sp
     ),
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,

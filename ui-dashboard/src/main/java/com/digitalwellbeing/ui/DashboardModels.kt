@@ -4,8 +4,22 @@ import com.digitalwellbeing.capture.AppFlowStep
 import java.time.LocalDate
 
 data class TrendPoint(
+    val hour: Int,
     val label: String,
-    val value: Int
+    val value: Int,
+    val formattedValue: String
+)
+
+data class TrendSeries(
+    val packageName: String?,
+    val label: String,
+    val colorHex: Long,
+    val points: List<TrendPoint>
+)
+
+data class TrendChart(
+    val total: TrendSeries,
+    val apps: List<TrendSeries>
 )
 
 data class DashboardState(
@@ -18,7 +32,7 @@ data class DashboardState(
     val cognitiveLoadScore: Int,
     val timeline: List<TimelineSlice>,
     val heatmap: List<HeatmapCell>,
-    val trends: List<TrendPoint>,
+    val trends: TrendChart,
     val flow: List<AppFlowStep>
 )
 
@@ -30,6 +44,15 @@ data class TimelineSlice(
 
 data class HeatmapCell(
     val dayLabel: String,
+    val dateLabel: String,
     val hour: Int,
-    val intensity: Float
+    val intensity: Float,
+    val minutes: Int,
+    val apps: List<AppUsageBreakdown>
+)
+
+data class AppUsageBreakdown(
+    val label: String,
+    val minutes: Int,
+    val colorHex: Long
 )

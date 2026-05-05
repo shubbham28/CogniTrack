@@ -1,6 +1,7 @@
 package com.digitalwellbeing.app
 
 import android.os.Build
+import android.content.Intent
 import android.content.pm.PackageManager
 import com.digitalwellbeing.analytics.DailySummaryCalculator
 import com.digitalwellbeing.analytics.DigitalFitnessTranslator
@@ -13,14 +14,20 @@ import com.digitalwellbeing.capture.RawEvent
 import com.digitalwellbeing.storage.DigitalWellbeingDao
 import com.digitalwellbeing.storage.toDomain
 import com.digitalwellbeing.storage.toEntity
+import com.digitalwellbeing.ui.AppUsageBreakdown
 import com.digitalwellbeing.ui.DashboardState
 import com.digitalwellbeing.ui.HeatmapCell
 import com.digitalwellbeing.ui.TimelineSlice
+import com.digitalwellbeing.ui.TrendChart
 import com.digitalwellbeing.ui.TrendPoint
+import com.digitalwellbeing.ui.TrendSeries
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.math.absoluteValue
 
 class DashboardRepository(
@@ -29,12 +36,20 @@ class DashboardRepository(
     private val permissionGateway: PermissionGateway,
     private val dao: DigitalWellbeingDao,
     private val packageManager: PackageManager,
+    private val appPackageName: String,
     private val sessionStitcher: SessionStitcher,
     private val pickupCounter: PickupCounter,
     private val summaryCalculator: DailySummaryCalculator,
     private val translator: DigitalFitnessTranslator,
     private val zoneId: ZoneId = ZoneId.systemDefault()
 ) {
+    private data class HourSlice(
+        val date: LocalDate,
+        val hour: Int,
+        val packageName: String,
+        val seconds: Long
+    )
+
     fun statusLine(): String {
         return if (permissionGateway.hasNotificationAccess()) {
             "Imported live UsageStats, screen events, and notification load"
@@ -60,7 +75,8 @@ class DashboardRepository(
         persistSessions(sessions, sevenDaysAgo, now)
 
         val today = now.atZone(zoneId).toLocalDate()
-        val todaySessions = sessions.filter { it.startTs.atZone(zoneId).toLocalDate() == today }
+        val visibleSessions = sessions.filter { shouldShowPackage(it.packageName) }
+        val todaySessions = visibleSessions.filter { it.startTs.atZone(zoneId).toLocalDate() == today }
         val todayEvents = rawEvents.filter { it.timestamp.atZone(zoneId).toLocalDate() == today }
         val pickups = pickupCounter.count(todayEvents)
         val notifications = todayEvents.count { it.eventType == EventType.NOTIFICATION_POSTED }
@@ -74,24 +90,20 @@ class DashboardRepository(
         )
         dao.insertDailySummary(summary.toEntity())
 
-        val translated = translator.summarize(
-            sessions = todaySessions,
-            notificationEvents = notifications,
-            multitaskingEvents = multitaskingMoments
-        )
+        val route = buildRoute(todaySessions)
 
         return DashboardState(
             day = today,
             totalMinutes = summary.totalScreenTimeMinutes,
             pickups = summary.totalPickups,
-            switches = summary.totalAppSwitches,
+            switches = route.zipWithNext().count { it.first.packageName != it.second.packageName },
             focusScore = summary.focusScore,
             distractionScore = summary.distractionScore,
             cognitiveLoadScore = summary.cognitiveLoadScore,
             timeline = buildTimeline(todaySessions),
-            heatmap = buildHeatmap(sessions.filter { it.startTs >= sevenDaysAgo }),
-            trends = buildTrends(now),
-            flow = translated.route.take(12).map { it.copy(packageName = resolveLabel(it.packageName)) }
+            heatmap = buildHeatmap(visibleSessions, today),
+            trends = buildTrends(todaySessions, today),
+            flow = route
         )
     }
 
@@ -127,34 +139,98 @@ class DashboardRepository(
             .take(8)
     }
 
-    private fun buildHeatmap(sessions: List<AppSession>): List<HeatmapCell> {
-        val today = LocalDate.now(zoneId)
+    private fun buildHeatmap(sessions: List<AppSession>, today: LocalDate): List<HeatmapCell> {
+        val hourSlices = splitIntoHourSlices(sessions)
         return (0..6).flatMap { dayOffset ->
             val date = today.minusDays((6 - dayOffset).toLong())
-            val sessionsForDay = sessions.filter { it.startTs.atZone(zoneId).toLocalDate() == date }
-            val maxHourMinutes = sessionsForDay
-                .groupBy { it.startTs.atZone(zoneId).hour }
-                .maxOfOrNull { (_, hourSessions) -> hourSessions.sumOf { it.durationSec } / 60f }
-                ?.coerceAtLeast(1f) ?: 1f
+            val daySlices = hourSlices.filter { it.date == date }
+            val maxHourSeconds = daySlices
+                .groupBy { it.hour }
+                .maxOfOrNull { (_, slices) -> slices.sumOf { it.seconds } }
+                ?.coerceAtLeast(1L) ?: 1L
 
             (0..23).map { hour ->
-                val hourMinutes = sessionsForDay
-                    .filter { it.startTs.atZone(zoneId).hour == hour }
-                    .sumOf { it.durationSec } / 60f
+                val slicesForHour = daySlices.filter { it.hour == hour }
+                val hourSeconds = slicesForHour.sumOf { it.seconds }
                 HeatmapCell(
-                    dayLabel = date.dayOfWeek.name.take(1),
+                    dayLabel = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                    dateLabel = formatDate(date),
                     hour = hour,
-                    intensity = (hourMinutes / maxHourMinutes).coerceIn(0f, 1f)
+                    intensity = (hourSeconds / maxHourSeconds.toFloat()).coerceIn(0f, 1f),
+                    minutes = secondsToMinutes(hourSeconds),
+                    apps = slicesForHour
+                        .groupBy { it.packageName }
+                        .map { (packageName, appSlices) ->
+                            AppUsageBreakdown(
+                                label = resolveLabel(packageName),
+                                minutes = secondsToMinutes(appSlices.sumOf { it.seconds }),
+                                colorHex = packageColor(packageName)
+                            )
+                        }
+                        .sortedByDescending { it.minutes }
+                        .take(4)
                 )
             }
         }
     }
 
-    private fun buildTrends(now: Instant): List<TrendPoint> {
-        return listOf(7L, 30L, 90L).map { days ->
-            val cutoff = now.minus(days, ChronoUnit.DAYS)
-            TrendPoint("${days}d", usageSummaryReader.totalMinutesBetween(cutoff, now))
-        }
+    private fun buildTrends(sessions: List<AppSession>, day: LocalDate): TrendChart {
+        val hourSlices = splitIntoHourSlices(sessions).filter { it.date == day }
+        val totalSeries = TrendSeries(
+            packageName = null,
+            label = "Total",
+            colorHex = 0xFFD64C2F,
+            points = buildHourlyPoints(hourSlices)
+        )
+        val appSeries = sessions
+            .groupBy { it.packageName }
+            .map { (packageName, appSessions) -> packageName to appSessions.sumOf { it.durationSec } }
+            .sortedByDescending { it.second }
+            .take(5)
+            .map { (packageName, _) ->
+                TrendSeries(
+                    packageName = packageName,
+                    label = resolveLabel(packageName),
+                    colorHex = packageColor(packageName),
+                    points = buildHourlyPoints(hourSlices.filter { it.packageName == packageName })
+                )
+            }
+        return TrendChart(
+            total = totalSeries,
+            apps = appSeries
+        )
+    }
+
+    private fun buildRoute(sessions: List<AppSession>): List<com.digitalwellbeing.capture.AppFlowStep> {
+        val mergedSessions = mutableListOf<AppSession>()
+        sessions
+            .sortedBy { it.startTs }
+            .filter { it.durationSec >= 20 }
+            .forEach { session ->
+                val last = mergedSessions.lastOrNull()
+                if (
+                    last != null &&
+                    last.packageName == session.packageName &&
+                    Duration.between(last.endTs, session.startTs).abs() <= Duration.ofMinutes(2)
+                ) {
+                    mergedSessions[mergedSessions.lastIndex] = last.copy(
+                        endTs = session.endTs,
+                        durationSec = last.durationSec + session.durationSec
+                    )
+                } else {
+                    mergedSessions += session
+                }
+            }
+
+        return mergedSessions
+            .takeLast(12)
+            .mapIndexed { index, session ->
+                com.digitalwellbeing.capture.AppFlowStep(
+                    packageName = resolveLabel(session.packageName),
+                    sequenceIndex = index,
+                    durationSec = session.durationSec
+                )
+            }
     }
 
     private fun resolveLabel(packageName: String): String {
@@ -190,6 +266,97 @@ class DashboardRepository(
 
     private fun estimateMultitasking(sessions: List<AppSession>): Int {
         return sessions.count { it.durationSec in 1..45 }
+    }
+
+    private fun shouldShowPackage(packageName: String): Boolean {
+        val hiddenPackages = setOf(
+            appPackageName,
+            "android",
+            "com.android.systemui",
+            "com.google.android.permissioncontroller",
+            "com.google.android.apps.nexuslauncher",
+            "com.google.android.as"
+        )
+        if (packageName in hiddenPackages) return false
+
+        val homePackages = resolveHomePackages()
+
+        if (packageName in homePackages) return false
+
+        return packageManager.getLaunchIntentForPackage(packageName) != null
+    }
+
+    private fun formatMinutes(minutes: Int): String {
+        val hours = minutes / 60
+        val remainder = minutes % 60
+        return when {
+            hours > 0 && remainder > 0 -> "${hours}h ${remainder}m"
+            hours > 0 -> "${hours}h"
+            else -> "${minutes}m"
+        }
+    }
+
+    private fun resolveHomePackages(): Set<String> {
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val activities = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.queryIntentActivities(
+                homeIntent,
+                PackageManager.ResolveInfoFlags.of(0)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.queryIntentActivities(homeIntent, 0)
+        }
+        return activities.map { it.activityInfo.packageName }.toSet()
+    }
+
+    private fun splitIntoHourSlices(sessions: List<AppSession>): List<HourSlice> {
+        return sessions.flatMap { session ->
+            val sessionStart = session.startTs.atZone(zoneId)
+            val sessionEnd = session.endTs.atZone(zoneId)
+            if (!sessionEnd.isAfter(sessionStart)) return@flatMap emptyList()
+
+            buildList {
+                var cursor = sessionStart
+                while (cursor.isBefore(sessionEnd)) {
+                    val nextHour = cursor.truncatedTo(ChronoUnit.HOURS).plusHours(1)
+                    val sliceEnd = minOf(nextHour, sessionEnd)
+                    val seconds = Duration.between(cursor, sliceEnd).seconds.coerceAtLeast(0)
+                    if (seconds > 0) {
+                        add(
+                            HourSlice(
+                                date = cursor.toLocalDate(),
+                                hour = cursor.hour,
+                                packageName = session.packageName,
+                                seconds = seconds
+                            )
+                        )
+                    }
+                    cursor = sliceEnd
+                }
+            }
+        }
+    }
+
+    private fun buildHourlyPoints(hourSlices: List<HourSlice>): List<TrendPoint> {
+        return (0..23).map { hour ->
+            val minutes = secondsToMinutes(hourSlices.filter { it.hour == hour }.sumOf { it.seconds })
+            TrendPoint(
+                hour = hour,
+                label = hour.toString().padStart(2, '0'),
+                value = minutes,
+                formattedValue = formatMinutes(minutes)
+            )
+        }
+    }
+
+    private fun secondsToMinutes(seconds: Long): Int {
+        return if (seconds <= 0) 0 else ((seconds + 59) / 60).toInt()
+    }
+
+    private fun formatDate(date: LocalDate): String {
+        val month = date.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+        return "$month ${date.dayOfMonth}"
     }
 }
 

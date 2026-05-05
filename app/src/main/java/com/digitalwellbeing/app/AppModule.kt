@@ -44,6 +44,7 @@ object AppModule {
             permissionGateway = PermissionGateway(appContext),
             dao = database.wellbeingDao(),
             packageManager = packageManager,
+            appPackageName = appContext.packageName,
             sessionStitcher = SessionStitcher(),
             pickupCounter = PickupCounter(),
             summaryCalculator = DailySummaryCalculator(ZoneId.systemDefault()),

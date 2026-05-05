@@ -19,17 +19,62 @@ fun sampleDashboardState(): DashboardState = DashboardState(
         TimelineSlice("Video", 66, 0xFFDD8C6F)
     ),
     heatmap = buildList {
-        val days = listOf("M", "T", "W", "T", "F", "S", "S")
+        val today = LocalDate.now()
+        val days = listOf("Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue")
         days.forEachIndexed { dayIndex, label ->
-            repeat(12) { hour ->
-                add(HeatmapCell(label, hour, ((dayIndex + hour) % 5) / 4f))
+            val date = today.minusDays((days.lastIndex - dayIndex).toLong())
+            repeat(24) { hour ->
+                add(
+                    HeatmapCell(
+                        dayLabel = label,
+                        dateLabel = date.toString(),
+                        hour = hour,
+                        intensity = ((dayIndex + hour) % 5) / 4f,
+                        minutes = ((dayIndex + hour) % 4) * 12,
+                        apps = listOf(
+                            AppUsageBreakdown("Docs", 18, 0xFFD64C2F),
+                            AppUsageBreakdown("Chat", 10, 0xFF2A3441)
+                        )
+                    )
+                )
             }
         }
     },
-    trends = listOf(
-        TrendPoint("7d", 54),
-        TrendPoint("30d", 61),
-        TrendPoint("90d", 47)
+    trends = TrendChart(
+        total = TrendSeries(
+            packageName = null,
+            label = "Total",
+            colorHex = 0xFFD64C2F,
+            points = (0..23).map { hour ->
+                val minutes = when {
+                    hour in 8..10 -> 22
+                    hour in 11..14 -> 36
+                    hour in 19..22 -> 28
+                    else -> 6
+                }
+                TrendPoint(hour, hour.toString().padStart(2, '0'), minutes, "${minutes}m")
+            }
+        ),
+        apps = listOf(
+            TrendSeries(
+                packageName = "docs",
+                label = "Docs",
+                colorHex = 0xFF9BC53D,
+                points = (0..23).map { hour ->
+                    val minutes = if (hour in 9..12) 18 else 0
+                    TrendPoint(hour, hour.toString().padStart(2, '0'), minutes, "${minutes}m")
+                }
+            ),
+            TrendSeries(
+                packageName = "chat",
+                label = "Chat",
+                colorHex = 0xFF6B7A8F,
+                points = (0..23).map { hour ->
+                    val minutes = if (hour in 19..22) 14 else 2
+                    TrendPoint(hour, hour.toString().padStart(2, '0'), minutes, "${minutes}m")
+                }
+            )
+        )
     ),
     flow = listOf(
         AppFlowStep("Docs", 0, 1800),
