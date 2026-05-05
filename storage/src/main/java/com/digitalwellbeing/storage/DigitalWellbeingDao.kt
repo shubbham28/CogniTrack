@@ -19,6 +19,12 @@ interface DigitalWellbeingDao {
     @Query("SELECT * FROM app_sessions ORDER BY startEpochMs DESC")
     suspend fun sessions(): List<AppSessionEntity>
 
+    @Query("DELETE FROM raw_events WHERE timestampEpochMs BETWEEN :startEpochMs AND :endEpochMs")
+    suspend fun deleteRawEventsBetween(startEpochMs: Long, endEpochMs: Long)
+
+    @Query("DELETE FROM app_sessions WHERE startEpochMs >= :startEpochMs AND endEpochMs <= :endEpochMs")
+    suspend fun deleteSessionsBetween(startEpochMs: Long, endEpochMs: Long)
+
     @Query("DELETE FROM raw_events WHERE timestampEpochMs < :cutoffEpochMs")
     suspend fun purgeRawEventsBefore(cutoffEpochMs: Long)
 

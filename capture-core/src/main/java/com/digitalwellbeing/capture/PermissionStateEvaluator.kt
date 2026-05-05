@@ -5,9 +5,6 @@ class PermissionStateEvaluator {
         if (!snapshot.hasUsageAccess) {
             return PermissionState.NEEDS_USAGE_ACCESS
         }
-        if (!snapshot.hasNotificationAccess) {
-            return PermissionState.NEEDS_NOTIFICATION_ACCESS
-        }
         if (snapshot.advancedModeEnabled && !snapshot.hasAccessibilityAccess) {
             return PermissionState.NEEDS_ACCESSIBILITY_ACCESS
         }

@@ -14,7 +14,7 @@ class CollectorOrchestratorTest {
         val collector = orchestrator.activeCollector(
             PermissionSnapshot(
                 hasUsageAccess = true,
-                hasNotificationAccess = true,
+                hasNotificationAccess = false,
                 hasAccessibilityAccess = false,
                 advancedModeEnabled = false
             )
@@ -28,7 +28,7 @@ class CollectorOrchestratorTest {
         val collector = orchestrator.activeCollector(
             PermissionSnapshot(
                 hasUsageAccess = true,
-                hasNotificationAccess = true,
+                hasNotificationAccess = false,
                 hasAccessibilityAccess = false,
                 advancedModeEnabled = true
             )
@@ -42,7 +42,7 @@ class CollectorOrchestratorTest {
         val collector = orchestrator.activeCollector(
             PermissionSnapshot(
                 hasUsageAccess = true,
-                hasNotificationAccess = true,
+                hasNotificationAccess = false,
                 hasAccessibilityAccess = true,
                 advancedModeEnabled = true
             )

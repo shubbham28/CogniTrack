@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -48,6 +50,8 @@ private enum class DashboardTab(val label: String) {
 @Composable
 fun DashboardScreen(
     state: DashboardState,
+    statusLine: String? = null,
+    onRefresh: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -74,7 +78,7 @@ fun DashboardScreen(
             label = "dashboard-tab"
         ) { tab ->
             when (tab) {
-                DashboardTab.HOME -> HomeTab(state)
+                DashboardTab.HOME -> HomeTab(state, statusLine, onRefresh)
                 DashboardTab.INSIGHTS -> InsightsTab(state)
                 DashboardTab.BEHAVIOR -> BehaviorTab(state)
                 DashboardTab.TRUST -> TrustTab()
@@ -84,7 +88,11 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun HomeTab(state: DashboardState) {
+private fun HomeTab(
+    state: DashboardState,
+    statusLine: String?,
+    onRefresh: (() -> Unit)?
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -109,6 +117,26 @@ private fun HomeTab(state: DashboardState) {
                 text = "${state.totalMinutes} min active across ${state.timeline.size} sessions",
                 style = MaterialTheme.typography.bodyLarge
             )
+            if (statusLine != null || onRefresh != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = statusLine ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (onRefresh != null) {
+                        FilledTonalButton(onClick = onRefresh) {
+                            Text("Refresh")
+                        }
+                    }
+                }
+            }
         }
         item { ScoreStrip(state) }
         item { TimelineRibbon(state.timeline) }
@@ -178,6 +206,7 @@ private fun TrustTab() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ScoreStrip(state: DashboardState) {
     FlowRow(
@@ -280,6 +309,7 @@ fun WeeklyHeatmap(cells: List<HeatmapCell>) {
 
 @Composable
 private fun TrendDeck(trends: List<TrendPoint>) {
+    val trendColor = MaterialTheme.colorScheme.tertiary
     Card {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Trend cards", style = MaterialTheme.typography.titleLarge)
@@ -295,7 +325,7 @@ private fun TrendDeck(trends: List<TrendPoint>) {
                 }
                 for (index in 0 until points.lastIndex) {
                     drawLine(
-                        color = MaterialTheme.colorScheme.tertiary,
+                        color = trendColor,
                         start = points[index],
                         end = points[index + 1],
                         strokeWidth = 8f,
